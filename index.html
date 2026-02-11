@@ -1,3 +1,4 @@
+DEMO_HTML = """
 <!doctype html>
 <html>
   <head>
@@ -13,86 +14,118 @@
       input[type="number"], input[type="password"], input[type="text"] { padding: 6px 8px; }
       .card { border: 1px solid #ddd; border-radius: 12px; padding: 12px; margin: 14px 0; }
       .status { color: #666; font-size: 12px; }
+      .err { color: #ff8080; }
+      code { background: #f4f4f4; padding: 2px 6px; border-radius: 6px; }
     </style>
   </head>
   <body>
     <h1>Inference Demo: Llama 3.1 8B Instruct - 4-bit IMQ quantized</h1>
-    <p><small>OpenAI-compatible endpoint behind the scenes: <code>/v1/chat/completions</code></small></p>
+    <p><small>Calls an OpenAI-compatible endpoint: <code>/v1/chat/completions</code></small></p>
 
     <div class="card">
       <div class="row">
         <label>
+          Endpoint URL
+          <input id="endpoint" type="text" style="width: 520px;"
+                 placeholder="https://YOUR-ENDPOINT.us-east-1.aws.endpoints.huggingface.cloud"
+                 autocomplete="off" />
+        </label>
+      </div>
+      <div class="row" style="margin-top: 8px;">
+        <label>
           HF Token
           <input id="hf_token" type="password" placeholder="hf_..." style="width: 340px;" autocomplete="off" />
         </label>
-        <button onclick="saveToken()">Save token</button>
+        <button onclick="saveSettings()">Save</button>
         <button onclick="clearToken()">Clear token</button>
         <span class="status" id="token_status"></span>
       </div>
       <p><small>
-        Token is kept only in your browser (<code>localStorage</code>) and sent as an <code>Authorization: Bearer ...</code> header.
-        Avoid putting tokens in URLs.
+        Token is stored only in your browser (<code>localStorage</code>) and sent as an <code>Authorization: Bearer ...</code> header.
       </small></p>
     </div>
 
     <textarea id="prompt">Explain in 3-5 sentences: The future of artificial intelligence is...</textarea>
 
     <div class="row" style="margin-top: 10px;">
-      <button onclick="send()">Generate</button>
+      <button id="btn" onclick="send()">Generate</button>
       <label>max_tokens <input id="max_tokens" type="number" value="256" min="1" max="2048"/></label>
       <label>temperature <input id="temp" type="number" value="0.7" step="0.1" min="0" max="2"/></label>
+      <span class="status" id="run_status"></span>
     </div>
 
     <h3>Output</h3>
     <pre id="out"></pre>
 
     <script>
-      const TOKEN_LS_KEY = "HF_TOKEN_DEMO";
+      const LS_ENDPOINT = "DEMO_ENDPOINT";
+      const LS_TOKEN = "HF_TOKEN_DEMO";
+
+      const out = document.getElementById("out");
+      const statusEl = document.getElementById("run_status");
+      const tokenStatus = document.getElementById("token_status");
+      const btn = document.getElementById("btn");
+
+      function setRunStatus(msg, isErr=false) {
+        statusEl.textContent = msg;
+        statusEl.className = "status" + (isErr ? " err" : "");
+      }
 
       function setTokenStatus(msg) {
-        document.getElementById("token_status").textContent = msg;
+        tokenStatus.textContent = msg;
       }
 
-      function loadTokenFromStorage() {
-        const saved = localStorage.getItem(TOKEN_LS_KEY);
-        if (saved) {
-          document.getElementById("hf_token").value = saved;
+      function loadSettings() {
+        const savedEndpoint = localStorage.getItem(LS_ENDPOINT);
+        const savedToken = localStorage.getItem(LS_TOKEN);
+        if (savedEndpoint) document.getElementById("endpoint").value = savedEndpoint;
+        if (savedToken) {
+          document.getElementById("hf_token").value = savedToken;
           setTokenStatus("Token loaded ✅");
-        } else {
-          setTokenStatus("");
         }
       }
 
-      function saveToken() {
+      function saveSettings() {
+        const endpoint = document.getElementById("endpoint").value.trim().replace(/\\/+$/, "");
         const token = document.getElementById("hf_token").value.trim();
-        if (!token) {
-          setTokenStatus("No token to save.");
-          return;
+        if (endpoint) localStorage.setItem(LS_ENDPOINT, endpoint);
+        if (token) {
+          localStorage.setItem(LS_TOKEN, token);
+          setTokenStatus("Saved ✅");
+        } else {
+          setTokenStatus("Saved endpoint ✅ (no token)");
         }
-        localStorage.setItem(TOKEN_LS_KEY, token);
-        setTokenStatus("Token saved ✅");
       }
 
       function clearToken() {
-        localStorage.removeItem(TOKEN_LS_KEY);
+        localStorage.removeItem(LS_TOKEN);
         document.getElementById("hf_token").value = "";
         setTokenStatus("Token cleared ✅");
       }
 
       async function send() {
-        const out = document.getElementById("out");
-        out.textContent = "Generating...";
-
         try {
+          btn.disabled = true;
+          setRunStatus("Sending request...");
+          out.textContent = "";
+
+          const endpoint = document.getElementById("endpoint").value.trim().replace(/\\/+$/, "");
+          const token = document.getElementById("hf_token").value.trim();
+
+          if (!endpoint) {
+            setRunStatus("Missing endpoint URL.", true);
+            out.textContent = "Set Endpoint URL to your HF endpoint base, e.g.\\nhttps://xxxx.us-east-1.aws.endpoints.huggingface.cloud";
+            return;
+          }
+          if (!token) {
+            setRunStatus("Missing HF token.", true);
+            out.textContent = "Paste your HF token in the HF Token field.";
+            return;
+          }
+
           const prompt = document.getElementById("prompt").value;
           const max_tokens = parseInt(document.getElementById("max_tokens").value, 10);
           const temperature = parseFloat(document.getElementById("temp").value);
-
-          const token = document.getElementById("hf_token").value.trim();
-          if (!token) {
-            out.textContent = "Missing HF token. Paste it above and click Save token (optional).";
-            return;
-          }
 
           const payload = {
             messages: [{ role: "user", content: prompt }],
@@ -100,9 +133,10 @@
             temperature
           };
 
-          console.log("Sending request:", payload);
+          const url = endpoint + "/v1/chat/completions";
+          setRunStatus("POST " + url);
 
-          const res = await fetch("/v1/chat/completions", {
+          const res = await fetch(url, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -111,38 +145,38 @@
             body: JSON.stringify(payload)
           });
 
-          console.log("Response status:", res.status);
-
-          let data;
-          try {
-            data = await res.json();
-          } catch (e) {
-            const raw = await res.text();
-            out.textContent = `HTTP ${res.status}\n\n` + raw;
-            console.error("Failed to parse JSON:", e);
-            return;
-          }
+          const raw = await res.text();
+          let data = null;
+          try { data = JSON.parse(raw); } catch {}
 
           if (!res.ok) {
-            out.textContent = `HTTP ${res.status}\n\n` + JSON.stringify(data, null, 2);
+            setRunStatus("Request failed: HTTP " + res.status, true);
+            out.textContent = data ? JSON.stringify(data, null, 2) : raw;
             return;
           }
 
-          const text = data.choices?.[0]?.message?.content;
-          const tps  = data.decode_tps;
+          setRunStatus("Success ✅");
+          const text = data?.choices?.[0]?.message?.content;
+          const tps  = data?.decode_tps;
 
           out.textContent =
             (text ?? JSON.stringify(data, null, 2)) +
-            (tps != null ? `\n\n---\nTokens per second: ${tps}` : "");
-        } catch (error) {
-          console.error("Error:", error);
-          out.textContent = `Error: ${error.message}\n\nCheck browser console for details.`;
+            (tps != null ? `\\n\\n---\\nTokens per second: ${tps}` : "");
+        } catch (e) {
+          setRunStatus("JavaScript error (see output).", true);
+          out.textContent = String(e && e.stack ? e.stack : e);
+        } finally {
+          btn.disabled = false;
         }
       }
 
-      // init
-      loadTokenFromStorage();
+      // Enter key shortcut: Ctrl+Enter to generate
+      document.getElementById("prompt").addEventListener("keydown", (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === "Enter") send();
+      });
+
+      loadSettings();
     </script>
   </body>
 </html>
-
+"""
