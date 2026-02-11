@@ -1,334 +1,139 @@
+DEMO_HTML = """
 <!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ICQ Endpoint Demo</title>
-  <style>
-    :root { color-scheme: light dark; }
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; max-width: 980px; margin: 32px auto; padding: 0 16px; }
-    h1 { font-size: 22px; margin-bottom: 8px; }
-    .row { display: grid; grid-template-columns: 1fr; gap: 12px; margin: 14px 0; }
-    label { font-size: 13px; opacity: 0.85; display: block; margin-bottom: 6px; }
-    input, textarea, select, button { width: 100%; padding: 10px; border-radius: 10px; border: 1px solid rgba(127,127,127,0.35); background: transparent; }
-    textarea { min-height: 120px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-    button { cursor: pointer; font-weight: 600; }
-    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .small { font-size: 12px; opacity: 0.8; }
-    .card { border: 1px solid rgba(127,127,127,0.35); border-radius: 14px; padding: 14px; }
-    pre { white-space: pre-wrap; word-break: break-word; border-radius: 14px; padding: 14px; border: 1px solid rgba(127,127,127,0.35); }
-    .status { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; opacity: 0.85; }
-    .actions { display: flex; gap: 10px; flex-wrap: wrap; }
-    .actions button { width: auto; }
-  </style>
-</head>
-<body>
-  <h1>ICQ Chat Demo (Netlify)</h1>
-  <div class="small">
-    This page never embeds your token in HTML. It stores your token in <b>localStorage</b> on your machine and sends it only as an
-    <b>Authorization</b> header to the endpoint.
-  </div>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>IMQ Inference Demo</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 16px; }
+      textarea { width: 100%; height: 120px; }
+      pre { white-space: pre-wrap; background: #111; color: #eee; padding: 12px; border-radius: 10px; }
+      .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      button { padding: 10px 14px; cursor: pointer; }
+      small { color: #666; }
+      input[type="number"], input[type="password"], input[type="text"] { padding: 6px 8px; }
+      .card { border: 1px solid #ddd; border-radius: 12px; padding: 12px; margin: 14px 0; }
+      .status { color: #666; font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <h1>Inference Demo: Llama 3.1 8B Instruct - 4-bit IMQ quantized</h1>
+    <p><small>OpenAI-compatible endpoint behind the scenes: <code>/v1/chat/completions</code></small></p>
 
-  <div class="row card">
-    <div class="row">
-      <div>
-        <label>Endpoint Base URL</label>
-        <input id="baseUrl" value="https://dzl4twil8fctt0zm.us-east-1.aws.endpoints.huggingface.cloud" />
-        <div class="small">We will call: <code>/v1/chat/completions</code> and <code>/v1/completions</code></div>
+    <div class="card">
+      <div class="row">
+        <label>
+          HF Token
+          <input id="hf_token" type="password" placeholder="hf_..." style="width: 340px;" autocomplete="off" />
+        </label>
+        <button onclick="saveToken()">Save token</button>
+        <button onclick="clearToken()">Clear token</button>
+        <span class="status" id="token_status"></span>
       </div>
-
-      <div>
-        <label>Hugging Face Token</label>
-        <input id="token" type="password" placeholder="hf_..." autocomplete="off" />
-        <div class="small">
-          Not stored server-side. Click “Save token” to store in your browser; “Clear token” to remove.
-        </div>
-        <div class="actions" style="margin-top:10px;">
-          <button id="saveToken">Save token</button>
-          <button id="clearToken">Clear token</button>
-          <button id="checkAuth">Check auth</button>
-        </div>
-      </div>
+      <p><small>
+        Token is kept only in your browser (<code>localStorage</code>) and sent as an <code>Authorization: Bearer ...</code> header.
+        Avoid putting tokens in URLs.
+      </small></p>
     </div>
 
-    <div class="grid2">
-      <div>
-        <label>temperature</label>
-        <input id="temperature" type="number" step="0.1" value="0.7" />
-      </div>
-      <div>
-        <label>top_p</label>
-        <input id="top_p" type="number" step="0.01" value="0.95" />
-      </div>
-    </div>
-    <div class="grid2">
-      <div>
-        <label>max_tokens</label>
-        <input id="max_tokens" type="number" step="1" value="256" />
-      </div>
-      <div>
-        <label>Endpoint</label>
-        <select id="endpointType">
-          <option value="chat">/v1/chat/completions</option>
-          <option value="completions">/v1/completions</option>
-        </select>
-      </div>
+    <textarea id="prompt">Explain in 3-5 sentences: The future of artificial intelligence is...</textarea>
+
+    <div class="row" style="margin-top: 10px;">
+      <button onclick="send()">Generate</button>
+      <label>max_tokens <input id="max_tokens" type="number" value="256" min="1" max="2048"/></label>
+      <label>temperature <input id="temp" type="number" value="0.7" step="0.1" min="0" max="2"/></label>
     </div>
 
-    <div>
-      <label>Prompt / Messages</label>
-      <textarea id="prompt">You are a helpful analyst. In 3-5 sentences, explain in plain English: Q: The future of artificial intelligence is A:</textarea>
-      <div class="small">
-        For chat: we send <code>{"messages":[{"role":"user","content": ...}]}</code>. For completions: we send <code>{"prompt": ...}</code>.
-      </div>
-    </div>
+    <h3>Output</h3>
+    <pre id="out"></pre>
 
-    <div class="actions">
-      <button id="run">Run</button>
-      <button id="runStream">Run (stream)</button>
-      <button id="stopStream" disabled>Stop stream</button>
-    </div>
+    <script>
+      const TOKEN_LS_KEY = "HF_TOKEN_DEMO";
 
-    <div class="status" id="status">Idle.</div>
-  </div>
-
-  <h2 style="font-size:18px;">Output</h2>
-  <pre id="output"></pre>
-
-<script>
-(() => {
-  const LS_KEY = "hf_token_demo";
-
-  const el = (id) => document.getElementById(id);
-  const baseUrlEl = el("baseUrl");
-  const tokenEl = el("token");
-  const endpointTypeEl = el("endpointType");
-  const promptEl = el("prompt");
-  const temperatureEl = el("temperature");
-  const topPEl = el("top_p");
-  const maxTokensEl = el("max_tokens");
-  const outEl = el("output");
-  const statusEl = el("status");
-
-  const saveBtn = el("saveToken");
-  const clearBtn = el("clearToken");
-  const checkBtn = el("checkAuth");
-  const runBtn = el("run");
-  const runStreamBtn = el("runStream");
-  const stopStreamBtn = el("stopStream");
-
-  let abortController = null;
-
-  // Restore token from localStorage
-  const saved = localStorage.getItem(LS_KEY);
-  if (saved) tokenEl.value = saved;
-
-  function setStatus(msg) {
-    statusEl.textContent = msg;
-  }
-
-  function getTokenOrThrow() {
-    const token = tokenEl.value.trim();
-    if (!token) throw new Error("Missing token. Paste it, then click Save token.");
-    return token;
-  }
-
-  function headers() {
-    const token = getTokenOrThrow();
-    return {
-      "Content-Type": "application/json",
-      "Authorization": "Bearer " + token,
-    };
-  }
-
-  function urlFor(path) {
-    return baseUrlEl.value.replace(/\/+$/, "") + path;
-  }
-
-  function buildPayload(stream=false) {
-    const temperature = Number(temperatureEl.value);
-    const top_p = Number(topPEl.value);
-    const max_tokens = Number(maxTokensEl.value);
-
-    if (endpointTypeEl.value === "chat") {
-      return {
-        messages: [{ role: "user", content: promptEl.value }],
-        temperature,
-        top_p,
-        max_tokens,
-        stream
-      };
-    }
-    // /v1/completions
-    return {
-      prompt: promptEl.value,
-      temperature,
-      top_p,
-      max_tokens,
-      stream
-    };
-  }
-
-  async function checkAuth() {
-    outEl.textContent = "";
-    setStatus("Checking auth...");
-    try {
-      // Call a real endpoint path; simplest is chat/completions with max_tokens=1
-      const res = await fetch(urlFor("/v1/chat/completions"), {
-        method: "POST",
-        headers: headers(),
-        body: JSON.stringify({ messages: [{ role: "user", content: "ping" }], max_tokens: 1, stream: false }),
-      });
-      const txt = await res.text();
-      if (!res.ok) {
-        setStatus(`Auth check failed: HTTP ${res.status}`);
-        outEl.textContent = txt;
-        return;
-      }
-      setStatus("Auth OK ✅");
-      outEl.textContent = txt;
-    } catch (e) {
-      setStatus("Auth check error: " + (e?.message || String(e)));
-    }
-  }
-
-  async function runOnce() {
-    outEl.textContent = "";
-    setStatus("Running...");
-    const path = endpointTypeEl.value === "chat" ? "/v1/chat/completions" : "/v1/completions";
-
-    try {
-      const res = await fetch(urlFor(path), {
-        method: "POST",
-        headers: headers(),
-        body: JSON.stringify(buildPayload(false)),
-      });
-      const txt = await res.text();
-      if (!res.ok) {
-        setStatus(`HTTP ${res.status}`);
-        outEl.textContent = txt;
-        return;
+      function setTokenStatus(msg) {
+        document.getElementById("token_status").textContent = msg;
       }
 
-      // Try to parse and show assistant text
-      let parsed;
-      try { parsed = JSON.parse(txt); } catch { parsed = null; }
-
-      if (parsed?.choices?.[0]) {
-        if (endpointTypeEl.value === "chat") {
-          outEl.textContent = parsed.choices[0]?.message?.content ?? txt;
+      function loadTokenFromStorage() {
+        const saved = localStorage.getItem(TOKEN_LS_KEY);
+        if (saved) {
+          document.getElementById("hf_token").value = saved;
+          setTokenStatus("Token loaded ✅");
         } else {
-          outEl.textContent = parsed.choices[0]?.text ?? txt;
-        }
-        const tps = parsed.decode_tps ?? parsed.usage?.decode_tps;
-        setStatus("Done ✅" + (tps ? `  (decode_tps=${tps})` : ""));
-      } else {
-        outEl.textContent = txt;
-        setStatus("Done ✅");
-      }
-    } catch (e) {
-      setStatus("Error: " + (e?.message || String(e)));
-    }
-  }
-
-  // Basic SSE-style streaming (works if your server uses text/event-stream like OpenAI)
-  async function runStream() {
-    outEl.textContent = "";
-    setStatus("Streaming...");
-    const path = endpointTypeEl.value === "chat" ? "/v1/chat/completions" : "/v1/completions";
-
-    abortController = new AbortController();
-    stopStreamBtn.disabled = false;
-    runStreamBtn.disabled = true;
-    runBtn.disabled = true;
-
-    try {
-      const res = await fetch(urlFor(path), {
-        method: "POST",
-        headers: headers(),
-        body: JSON.stringify(buildPayload(true)),
-        signal: abortController.signal,
-      });
-
-      if (!res.ok || !res.body) {
-        const txt = await res.text();
-        setStatus(`HTTP ${res.status}`);
-        outEl.textContent = txt;
-        return;
-      }
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder("utf-8");
-      let buffer = "";
-
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-
-        // Parse lines; OpenAI-like streaming uses "data: {...}\n\n" chunks and "data: [DONE]"
-        const parts = buffer.split("\n\n");
-        buffer = parts.pop() || "";
-
-        for (const part of parts) {
-          const line = part.trim();
-          if (!line) continue;
-          const m = line.match(/^data:\s*(.*)$/m);
-          const data = m ? m[1] : line;
-
-          if (data === "[DONE]") {
-            setStatus("Stream done ✅");
-            return;
-          }
-
-          try {
-            const evt = JSON.parse(data);
-            const delta = evt?.choices?.[0]?.delta?.content
-                       ?? evt?.choices?.[0]?.message?.content
-                       ?? evt?.choices?.[0]?.text
-                       ?? "";
-            if (delta) outEl.textContent += delta;
-          } catch {
-            // If server streams raw text instead of JSON
-            outEl.textContent += data;
-          }
+          setTokenStatus("");
         }
       }
 
-      setStatus("Stream ended ✅");
-    } catch (e) {
-      if (e?.name === "AbortError") {
-        setStatus("Stream stopped.");
-      } else {
-        setStatus("Stream error: " + (e?.message || String(e)));
+      function saveToken() {
+        const token = document.getElementById("hf_token").value.trim();
+        if (!token) {
+          setTokenStatus("No token to save.");
+          return;
+        }
+        localStorage.setItem(TOKEN_LS_KEY, token);
+        setTokenStatus("Token saved ✅");
       }
-    } finally {
-      stopStreamBtn.disabled = true;
-      runStreamBtn.disabled = false;
-      runBtn.disabled = false;
-      abortController = null;
-    }
-  }
 
-  saveBtn.onclick = () => {
-    localStorage.setItem(LS_KEY, tokenEl.value.trim());
-    setStatus("Token saved locally ✅");
-  };
+      function clearToken() {
+        localStorage.removeItem(TOKEN_LS_KEY);
+        document.getElementById("hf_token").value = "";
+        setTokenStatus("Token cleared ✅");
+      }
 
-  clearBtn.onclick = () => {
-    localStorage.removeItem(LS_KEY);
-    tokenEl.value = "";
-    setStatus("Token cleared ✅");
-  };
+      async function send() {
+        const out = document.getElementById("out");
+        out.textContent = "Generating...";
 
-  checkBtn.onclick = checkAuth;
-  runBtn.onclick = runOnce;
+        const prompt = document.getElementById("prompt").value;
+        const max_tokens = parseInt(document.getElementById("max_tokens").value, 10);
+        const temperature = parseFloat(document.getElementById("temp").value);
 
-  runStreamBtn.onclick = runStream;
-  stopStreamBtn.onclick = () => {
-    if (abortController) abortController.abort();
-  };
-})();
-</script>
-</body>
+        const token = document.getElementById("hf_token").value.trim();
+        if (!token) {
+          out.textContent = "Missing HF token. Paste it above and click Save token (optional).";
+          return;
+        }
+
+        const payload = {
+          messages: [{ role: "user", content: prompt }],
+          max_tokens,
+          temperature
+        };
+
+        const res = await fetch("/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + token
+          },
+          body: JSON.stringify(payload)
+        });
+
+        let data;
+        try {
+          data = await res.json();
+        } catch (e) {
+          const raw = await res.text();
+          out.textContent = `HTTP ${res.status}\\n\\n` + raw;
+          return;
+        }
+
+        if (!res.ok) {
+          out.textContent = `HTTP ${res.status}\\n\\n` + JSON.stringify(data, null, 2);
+          return;
+        }
+
+        const text = data.choices?.[0]?.message?.content;
+        const tps  = data.decode_tps;
+
+        out.textContent =
+          (text ?? JSON.stringify(data, null, 2)) +
+          (tps != null ? `\\n\\n---\\nTokens per second: ${tps}` : "");
+      }
+
+      // init
+      loadTokenFromStorage();
+    </script>
+  </body>
 </html>
+"""
