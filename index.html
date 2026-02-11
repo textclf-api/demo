@@ -1,4 +1,3 @@
-DEMO_HTML = """
 <!doctype html>
 <html>
   <head>
@@ -84,51 +83,61 @@ DEMO_HTML = """
         const out = document.getElementById("out");
         out.textContent = "Generating...";
 
-        const prompt = document.getElementById("prompt").value;
-        const max_tokens = parseInt(document.getElementById("max_tokens").value, 10);
-        const temperature = parseFloat(document.getElementById("temp").value);
-
-        const token = document.getElementById("hf_token").value.trim();
-        if (!token) {
-          out.textContent = "Missing HF token. Paste it above and click Save token (optional).";
-          return;
-        }
-
-        const payload = {
-          messages: [{ role: "user", content: prompt }],
-          max_tokens,
-          temperature
-        };
-
-        const res = await fetch("/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": "Bearer " + token
-          },
-          body: JSON.stringify(payload)
-        });
-
-        let data;
         try {
-          data = await res.json();
-        } catch (e) {
-          const raw = await res.text();
-          out.textContent = `HTTP ${res.status}\\n\\n` + raw;
-          return;
+          const prompt = document.getElementById("prompt").value;
+          const max_tokens = parseInt(document.getElementById("max_tokens").value, 10);
+          const temperature = parseFloat(document.getElementById("temp").value);
+
+          const token = document.getElementById("hf_token").value.trim();
+          if (!token) {
+            out.textContent = "Missing HF token. Paste it above and click Save token (optional).";
+            return;
+          }
+
+          const payload = {
+            messages: [{ role: "user", content: prompt }],
+            max_tokens,
+            temperature
+          };
+
+          console.log("Sending request:", payload);
+
+          const res = await fetch("/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer " + token
+            },
+            body: JSON.stringify(payload)
+          });
+
+          console.log("Response status:", res.status);
+
+          let data;
+          try {
+            data = await res.json();
+          } catch (e) {
+            const raw = await res.text();
+            out.textContent = `HTTP ${res.status}\n\n` + raw;
+            console.error("Failed to parse JSON:", e);
+            return;
+          }
+
+          if (!res.ok) {
+            out.textContent = `HTTP ${res.status}\n\n` + JSON.stringify(data, null, 2);
+            return;
+          }
+
+          const text = data.choices?.[0]?.message?.content;
+          const tps  = data.decode_tps;
+
+          out.textContent =
+            (text ?? JSON.stringify(data, null, 2)) +
+            (tps != null ? `\n\n---\nTokens per second: ${tps}` : "");
+        } catch (error) {
+          console.error("Error:", error);
+          out.textContent = `Error: ${error.message}\n\nCheck browser console for details.`;
         }
-
-        if (!res.ok) {
-          out.textContent = `HTTP ${res.status}\\n\\n` + JSON.stringify(data, null, 2);
-          return;
-        }
-
-        const text = data.choices?.[0]?.message?.content;
-        const tps  = data.decode_tps;
-
-        out.textContent =
-          (text ?? JSON.stringify(data, null, 2)) +
-          (tps != null ? `\\n\\n---\\nTokens per second: ${tps}` : "");
       }
 
       // init
@@ -136,4 +145,4 @@ DEMO_HTML = """
     </script>
   </body>
 </html>
-"""
+
