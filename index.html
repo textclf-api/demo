@@ -16,9 +16,9 @@
     <h1>Inference Demo: Llama 3.1 8B Instruct - 4-bit IMQ quantized</h1>
     <p><small>OpenAI-compatible endpoint behind the scenes: <code>/v1/chat/completions</code></small></p>
 
-    <div class="row">
+    <!-- <div class="row">
       <label>HF Token <input id="hf_token" type="password" placeholder="hf_..." style="width: 300px;" /></label>
-    </div>
+    </div> -->
 
     <textarea id="prompt">Explain in 3-5 sentences: The future of artificial intelligence is...</textarea>
     <div class="row">
@@ -38,36 +38,92 @@
         const prompt = document.getElementById("prompt").value;
         const max_tokens = parseInt(document.getElementById("max_tokens").value, 10);
         const temperature = parseFloat(document.getElementById("temp").value);
-        const token = document.getElementById("hf_token").value.trim();
-
+        // const token = document.getElementById("hf_token").value.trim();
+        const stream = true;
         const payload = {
           messages: [{ role: "user", content: prompt }],
+          stream: stream,
           max_tokens,
           temperature
         };
+        const auth_string = "Bearer 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"
+        if (stream)
+        {
+          // Streaming response
+          const res = await fetch("https://dzl4twil8fctt0zm.us-east-1.aws.endpoints.huggingface.cloud/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              // If you enforce auth, paste token here or remove server-side requirement.
+              "Authorization": auth_string
+            },
+            body: JSON.stringify(payload)
+          });
 
-        const auth_string = "Bearer " + token
-        const res = await fetch("https://dzl4twil8fctt0zm.us-east-1.aws.endpoints.huggingface.cloud/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            // If you enforce auth, paste token here or remove server-side requirement.
-            "Authorization": auth_string
-          },
-          body: JSON.stringify(payload)
-        });
+          if (!res.ok) {
+            const error = await res.json();
+            out.textContent = JSON.stringify(error, null, 2);
+            return;
+          }
 
-        const data = await res.json();
-        if (!res.ok) {
-          out.textContent = JSON.stringify(data, null, 2);
-          return;
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+          let fullText = "";
+
+          out.textContent = "";
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop(); // Keep incomplete line in buffer
+
+            for (const line of lines) {
+              if (line.startsWith("data: ")) {
+                const data = line.slice(6);
+                if (data === "[DONE]") continue;
+                
+                try {
+                  const chunk = JSON.parse(data);
+                  const delta = chunk.choices?.[0]?.delta?.content;
+                  if (delta) {
+                    fullText += delta;
+                    out.textContent = fullText;
+                  }
+                } catch (e) {
+                  // Skip invalid JSON
+                }
+              }
+            }
+          }
         }
-        const text = data.choices?.[0]?.message?.content;
-        const tps  = data.decode_tps;
+        else
+        {
+          const res = await fetch("https://dzl4twil8fctt0zm.us-east-1.aws.endpoints.huggingface.cloud/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              // If you enforce auth, paste token here or remove server-side requirement.
+              "Authorization": auth_string
+            },
+            body: JSON.stringify(payload)
+          });
 
-        out.textContent =
-        (text ?? JSON.stringify(data, null, 2)) +
-        (tps != null ? `\n\n---\nTokens per second: ${tps}` : "");
+          const data = await res.json();
+          if (!res.ok) {
+            out.textContent = JSON.stringify(data, null, 2);
+            return;
+          }
+          const text = data.choices?.[0]?.message?.content;
+          const tps  = data.decode_tps;
+
+          out.textContent =
+          (text ?? JSON.stringify(data, null, 2)) +
+          (tps != null ? `\n\n---\nTokens per second: ${tps}` : "");
+      }
       }
     </script>
   </body>
