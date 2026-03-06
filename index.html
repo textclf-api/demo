@@ -16,9 +16,9 @@
     <h1>Inference Demo: Llama 3.1 8B Instruct - 4-bit IMQ quantized</h1>
     <p><small>OpenAI-compatible endpoint behind the scenes: <code>/v1/chat/completions</code></small></p>
 
-    <!-- <div class="row">
+    <div class="row">
       <label>HF Token <input id="hf_token" type="password" placeholder="hf_..." style="width: 300px;" /></label>
-    </div> -->
+    </div>
 
     <textarea id="prompt">Explain in 3-5 sentences: The future of artificial intelligence is...</textarea>
     <div class="row">
@@ -38,7 +38,7 @@
         const prompt = document.getElementById("prompt").value;
         const max_tokens = parseInt(document.getElementById("max_tokens").value, 10);
         const temperature = parseFloat(document.getElementById("temp").value);
-        // const token = document.getElementById("hf_token").value.trim();
+        const token = document.getElementById("hf_token").value.trim();
         const stream = true;
         const payload = {
           messages: [{ role: "user", content: prompt }],
