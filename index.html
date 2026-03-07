@@ -42,6 +42,7 @@
         const stream = true;
         const payload = {
           messages: [{ role: "user", content: prompt }],
+          model: "meta-llama/Llama-3.1-8B-Instruct",
           stream: stream,
           max_tokens,
           temperature
@@ -51,7 +52,7 @@
         if (stream)
         {
           // Streaming response
-          const res = await fetch("https://dzl4twil8fctt0zm.us-east-1.aws.endpoints.huggingface.cloud/v1/chat/completions", {
+          const res = await fetch("https://icq-server-info-image.onrender.com/v1/chat/completions", {
             method: "POST",
             headers: {
               "Content-Type": "application/json"
